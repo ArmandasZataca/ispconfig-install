@@ -1,0 +1,74 @@
+---
+- name: Install ISPConfig and configure additional settings
+  hosts: all
+  become: yes
+
+  tasks:
+    - name: Download and install ISPConfig
+      shell: |
+        wget -O - https://get.ispconfig.org | sh -s -- --use-nginx --use-ftp-ports=40110-40210 --unattended-upgrades --no-mailman --no-jailkit --monit --monit-alert-email=tu-email@dominio.com --ssh-port=22 --ssh-permit-root=no --ssh-password-authentication=no --ssh-harden --i-know-what-i-am-doing
+
+    - name: Install UFW
+      apt:
+        name: ufw
+        state: present
+
+    - name: Allow HTTP traffic
+      ufw:
+        rule: allow
+        port: 80
+        proto: tcp
+
+    - name: Allow HTTPS traffic
+      ufw:
+        rule: allow
+        port: 443
+        proto: tcp
+
+    - name: Allow FTP ports
+      ufw:
+        rule: allow
+        port: 40110:40210
+        proto: tcp
+
+    - name: Allow email ports
+      ufw:
+        rule: allow
+        port: "{{ item }}"
+        proto: tcp
+      with_items:
+        - 25
+        - 465
+        - 587
+        - 110
+        - 995
+        - 143
+        - 993
+
+    - name: Allow SSH from specific IPs
+      ufw:
+        rule: allow
+        from: "{{ item }}"
+        port: 22
+      with_items:
+        - 145.239.244.94
+        - 54.38.222.93
+        - 51.89.8.62
+        - 192.168.0.0/16
+
+    - name: Enable UFW
+      ufw:
+        state: enabled
+
+    - name: Configure SSH
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        line: "Match Address 145.239.244.94,54.38.222.93,51.89.8.62,192.168.0.0/16\n    PermitRootLogin yes\n    PasswordAuthentication yes"
+        create: yes
+        state: present
+        insertafter: EOF
+
+    - name: Restart SSH service
+      service:
+        name: sshd
+        state: restarted
